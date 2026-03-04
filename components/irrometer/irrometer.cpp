@@ -137,6 +137,7 @@ void Irrometer::step_finalize_sensor() {
     else if (r1_resistance_a_ < 4250) { r1_resistance_a_ += 680; }
     else if (r1_resistance_a_ < 9000) { r1_resistance_a_ += 740; }
     else if (r1_resistance_a_ < 20000) { r1_resistance_a_ += 964; }
+    else { r1_resistance_a_ += 964; }
 
     // Resistance Calculation B
     this->r1_resistance_b_ = this->rx_ * this->sen_v_10k_2_ / (this->supply_v_ - this->sen_v_10k_2_);
@@ -146,7 +147,8 @@ void Irrometer::step_finalize_sensor() {
     else if (r1_resistance_b_ < 5700) { r1_resistance_b_ -= 629; }
     else if (r1_resistance_b_ < 11450) { r1_resistance_b_ -= 731; }
     else if (r1_resistance_b_ < 20000) { r1_resistance_b_ -= 1470; }
-
+    else { r1_resistance_b_ -= 1470; }
+    
     this->r1_resistance_ = (this->r1_resistance_a_ + this->r1_resistance_b_) / 2.0;
 
     const float eps = 0.001f;
@@ -213,9 +215,24 @@ int Irrometer::resistance_to_cb(double res, double tempc, double cf) {
 }
 
 double Irrometer::resistance_to_temp(double res) {
-    double TempC = (-23.89 * (log(res))) + 246.00;
-    if (res < 0 || res > 30000 ) { TempC = 24.0; }
-    return TempC;
+    if (res <= 0 || res > 75000 ) { return 24.0; }
+    
+    // Steinhart-Hart Coefficients for a standard 10k NTC
+    const double A = 0.001129148;
+    const double B = 0.000234125;
+    const double C = 0.0000000876741;
+
+    double logRes = log(res);
+    double tempK = 1.0 / (A + (B * logRes) + (C * logRes * logRes * logRes));
+    
+    // temp is in Kelvin, so we subtract 273.15 at the end for Celsius.
+    double tempC = tempK - 273.15;
+    
+    if (tempC < -15.0 || tempC > 65.0) {
+        return 24.0;
+    }
+
+    return tempC;
 }
 
 }  // namespace irrometer
